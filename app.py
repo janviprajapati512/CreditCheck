@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import joblib
@@ -15,13 +16,51 @@ st.set_page_config(page_title="CreditCheck AI", page_icon="💳")
 
 # ---------------- HEADER ---------------- #
 st.title("💳 CreditCheck AI")
-st.markdown("### Simple Credit Approval System")
+st.markdown("### Simple Credit Approval System (India 🇮🇳)")
 
 st.info("""
 ✔ Enter your details  
 ✔ System checks your profile  
 ✔ Shows approval result with reason + suggestions  
 """)
+
+# ---------------- FORMATTERS ---------------- #
+def format_inr(amount):
+    amount = int(amount)
+    s = str(amount)
+
+    if len(s) <= 3:
+        return "₹" + s
+
+    last3 = s[-3:]
+    remaining = s[:-3]
+
+    remaining = ",".join(
+        [remaining[max(i-2, 0):i] for i in range(len(remaining), 0, -2)][::-1]
+    )
+
+    return f"₹{remaining},{last3}"
+
+
+def format_lakh_crore(amount):
+    if amount >= 10000000:
+        return f"₹{amount/10000000:.2f} Cr"
+    elif amount >= 100000:
+        return f"₹{amount/100000:.2f} Lakh"
+    else:
+        return format_inr(amount)
+
+
+def income_category(income):
+    if income < 300000:
+        return "🔴 Low Income"
+    elif income < 800000:
+        return "🟡 Middle Class"
+    elif income < 1500000:
+        return "🟢 Upper Middle Class"
+    else:
+        return "💎 High Income"
+
 
 # ---------------- CREDIT LABEL ---------------- #
 def get_score_label(score):
@@ -39,8 +78,23 @@ def select_with_placeholder(label, options):
     return st.selectbox(label, ["-- Please Select --"] + list(options))
 
 # ---------------- INPUT ---------------- #
+view_type = st.radio(
+    "💱 Select Currency View",
+    ["Standard ₹ Format", "Lakhs / Crores"],
+    horizontal=True
+)
+
 gender = select_with_placeholder("👤 Gender *", encoders['CODE_GENDER'].classes_)
-income = st.number_input("💰 Annual Income ($) *", min_value=0)
+
+income = st.number_input("💰 Annual Income (₹) *", min_value=0)
+
+if income > 0:
+    if view_type == "Lakhs / Crores":
+        st.write(f"Entered Income: {format_lakh_crore(income)}")
+    else:
+        st.write(f"Entered Income: {format_inr(income)}")
+
+    st.write(f"Income Category: {income_category(income)}")
 
 income_type = select_with_placeholder("💼 Income Type *", encoders['NAME_INCOME_TYPE'].classes_)
 education = select_with_placeholder("🎓 Education *", encoders['NAME_EDUCATION_TYPE'].classes_)
@@ -150,8 +204,8 @@ if st.button("🔍 Check Approval", disabled=not is_valid):
             if credit_score_user < 600:
                 reasons.append("Low credit score")
 
-            if income < 30000:
-                reasons.append("Low income")
+            if income < 300000:
+                reasons.append("Low income (below ₹3 Lakh)")
 
             if family_members > 5:
                 reasons.append("High financial responsibility")
@@ -159,8 +213,8 @@ if st.button("🔍 Check Approval", disabled=not is_valid):
             if credit_score_user > 750:
                 reasons.append("Strong credit history")
 
-            if income > 50000:
-                reasons.append("Good income level")
+            if income > 800000:
+                reasons.append("Strong income level (above ₹8 Lakh)")
 
             if not reasons:
                 reasons.append("Based on overall profile")
@@ -176,8 +230,8 @@ if st.button("🔍 Check Approval", disabled=not is_valid):
             if credit_score_user < 750:
                 suggestions.append("Improve credit score by paying bills on time")
 
-            if income < 30000:
-                suggestions.append("Increase income through better job or side hustle")
+            if income < 300000:
+                suggestions.append("Increase income beyond ₹3,00,000 annually")
 
             if family_members > 5:
                 suggestions.append("Reduce financial liabilities if possible")
@@ -194,4 +248,4 @@ if st.button("🔍 Check Approval", disabled=not is_valid):
         except Exception as e:
             st.error("❌ Prediction failed")
             st.write(str(e))
-
+```
