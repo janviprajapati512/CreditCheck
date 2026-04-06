@@ -1,8 +1,7 @@
 streamlit==1.52.2
 pandas==2.3.0
 numpy==1.26.4
-scikit-learn==1.6.0
-tensorflow==2.18.0
+scikit-learn==1.8.0
 matplotlib==3.10.3
 seaborn==0.13.2
 category_encoders==2.9.0
