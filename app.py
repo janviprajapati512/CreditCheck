@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import pandas as pd
 import joblib
@@ -248,4 +248,4 @@ if st.button("🔍 Check Approval", disabled=not is_valid):
         except Exception as e:
             st.error("❌ Prediction failed")
             st.write(str(e))
-```
+
