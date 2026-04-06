@@ -1,11 +1,16 @@
 import streamlit as st
 import pandas as pd
-import pickle
+import joblib
 
 # ---------------- LOAD MODEL ---------------- #
-model = pickle.load(open("model.pkl", "rb"))
-encoders = pickle.load(open("encoders.pkl", "rb"))
+try:
+    model = joblib.load("model.pkl")
+    encoders = joblib.load("encoders.pkl")
+except Exception as e:
+    st.error("❌ Model loading failed. Please check files.")
+    st.stop()
 
+# ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳")
 
 # ---------------- HEADER ---------------- #
@@ -80,85 +85,113 @@ if errors:
     for e in errors:
         st.error(f"❌ {e}")
 
-# ---------------- PREDICTION ---------------- #
-elif st.button("🔍 Check Approval"):
+# ---------------- BUTTON ---------------- #
+is_valid = len(errors) == 0
 
-    # ✅ Correct conversion
-    credit_score = (900 - credit_score_user) / 100
+if st.button("🔍 Check Approval", disabled=not is_valid):
 
-    user_data = [
-        encoders['CODE_GENDER'].transform([gender])[0],
-        income,
-        encoders['NAME_INCOME_TYPE'].transform([income_type])[0],
-        encoders['NAME_EDUCATION_TYPE'].transform([education])[0],
-        encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
-        encoders['OCCUPATION_TYPE'].transform([occupation])[0],
-        family_members,
-        credit_score
-    ]
+    with st.spinner("🔄 Checking your credit profile..."):
 
-    columns = [
-        'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
-        'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
-        'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
-    ]
+        try:
+            # ---------------- DATA PREP ---------------- #
+            credit_score = (900 - credit_score_user) / 100
 
-    df = pd.DataFrame([user_data], columns=columns)
+            user_data = [
+                encoders['CODE_GENDER'].transform([gender])[0],
+                income,
+                encoders['NAME_INCOME_TYPE'].transform([income_type])[0],
+                encoders['NAME_EDUCATION_TYPE'].transform([education])[0],
+                encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
+                encoders['OCCUPATION_TYPE'].transform([occupation])[0],
+                family_members,
+                credit_score
+            ]
 
-    pred = model.predict(df)[0]
-    prob = model.predict_proba(df)[0][1] * 100
+            columns = [
+                'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
+                'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
+                'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
+            ]
 
-    # ---------------- RESULT ---------------- #
-    if pred == 1:
-        st.success(f"✅ Approved (Confidence: {prob:.2f}%)")
-    else:
-        st.error(f"❌ Rejected (Risk: {100 - prob:.2f}%)")
+            df = pd.DataFrame([user_data], columns=columns)
 
-    # ---------------- WHY ---------------- #
-    st.markdown("### 🧠 Why this decision?")
+            # ---------------- PREDICTION ---------------- #
+            pred = model.predict(df)[0]
 
-    reasons = []
+            try:
+                prob = model.predict_proba(df)[0][1] * 100
+            except:
+                prob = None
 
-    if credit_score_user < 600:
-        reasons.append("Low credit score")
+            # ---------------- RESULT ---------------- #
+            st.markdown("## 📊 Result")
 
-    if income < 30000:
-        reasons.append("Low income")
+            if pred == 1:
+                if prob:
+                    st.success(f"🎉 Approved (Confidence: {prob:.2f}%)")
+                else:
+                    st.success("🎉 Approved")
+            else:
+                if prob:
+                    st.error(f"⚠️ Rejected (Risk: {100 - prob:.2f}%)")
+                else:
+                    st.error("⚠️ Rejected")
 
-    if family_members > 5:
-        reasons.append("High financial responsibility")
+            # ---------------- CONFIDENCE BAR ---------------- #
+            if prob:
+                st.progress(int(prob))
+                st.write(f"Confidence Score: {prob:.2f}%")
 
-    if credit_score_user > 750:
-        reasons.append("Strong credit history")
+            # ---------------- WHY ---------------- #
+            st.markdown("### 🧠 Why this decision?")
 
-    if income > 50000:
-        reasons.append("Good income level")
+            reasons = []
 
-    if not reasons:
-        reasons.append("Based on overall profile")
+            if credit_score_user < 600:
+                reasons.append("Low credit score")
 
-    for r in reasons:
-        st.write(f"• {r}")
+            if income < 30000:
+                reasons.append("Low income")
 
-    # ---------------- IMPROVEMENTS ---------------- #
-    st.markdown("### 🚀 How to improve your chances")
+            if family_members > 5:
+                reasons.append("High financial responsibility")
 
-    suggestions = []
+            if credit_score_user > 750:
+                reasons.append("Strong credit history")
 
-    if credit_score_user < 750:
-        suggestions.append("Improve credit score by paying bills on time")
+            if income > 50000:
+                reasons.append("Good income level")
 
-    if income < 30000:
-        suggestions.append("Increase income through better job or side hustle")
+            if not reasons:
+                reasons.append("Based on overall profile")
 
-    if family_members > 5:
-        suggestions.append("Reduce financial liabilities if possible")
+            for r in reasons:
+                st.write(f"• {r}")
 
-    if credit_score_user < 500:
-        suggestions.append("Avoid late payments and reduce loan defaults")
+            # ---------------- IMPROVEMENTS ---------------- #
+            st.markdown("### 🚀 How to improve your chances")
 
-    if not suggestions:
-        suggestions.append("Your profile is strong. Maintain good financial habits")
+            suggestions = []
 
-    for s in suggestions:
-        st.write(f"✔ {s}")
+            if credit_score_user < 750:
+                suggestions.append("Improve credit score by paying bills on time")
+
+            if income < 30000:
+                suggestions.append("Increase income through better job or side hustle")
+
+            if family_members > 5:
+                suggestions.append("Reduce financial liabilities if possible")
+
+            if credit_score_user < 500:
+                suggestions.append("Avoid late payments and reduce loan defaults")
+
+            if not suggestions:
+                suggestions.append("Your profile is strong. Maintain good financial habits")
+
+            for s in suggestions:
+                st.write(f"✔ {s}")
+
+        except Exception as e:
+            st.error("❌ Prediction failed")
+            st.write(str(e))
+
