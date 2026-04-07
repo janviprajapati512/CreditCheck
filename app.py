@@ -1,47 +1,77 @@
 import streamlit as st
 import pandas as pd
 import joblib
+from difflib import get_close_matches
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
 
-# ---------------- CSS ---------------- #
+# ---------------- PREMIUM UI ---------------- #
 st.markdown("""
 <style>
-.title {font-size:40px;font-weight:bold;color:#1f3c88;}
-.card {padding:20px;border-radius:15px;background:white;
-box-shadow:0 4px 10px rgba(0,0,0,0.1);margin-top:15px;}
-.success-card {background-color:#d4edda;color:#155724;}
-.error-card {background-color:#f8d7da;color:#721c24;}
+body {
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+}
+.title {
+    font-size: 42px;
+    font-weight: 800;
+    color: white;
+    text-align: center;
+}
+.subtitle {
+    text-align:center;
+    color: #cfd8dc;
+    margin-bottom: 25px;
+}
+.card {
+    padding: 20px;
+    border-radius: 15px;
+    background: white;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+.success-card {
+    background: linear-gradient(135deg, #00b09b, #96c93d);
+    color: white;
+    font-size: 18px;
+}
+.error-card {
+    background: linear-gradient(135deg, #ff416c, #ff4b2b);
+    color: white;
+    font-size: 18px;
+}
+.stButton>button {
+    background: linear-gradient(135deg, #1f3c88, #00c6ff);
+    color: white;
+    border-radius: 10px;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD MODEL ---------------- #
-try:
-    model = joblib.load("model.pkl")
-    encoders = joblib.load("encoders.pkl")
-except:
-    st.error("❌ Model loading failed")
-    st.stop()
+model = joblib.load("model.pkl")
+encoders = joblib.load("encoders.pkl")
 
 # ---------------- HEADER ---------------- #
 st.markdown('<div class="title">💳 CreditCheck AI</div>', unsafe_allow_html=True)
-st.markdown("### Enterprise Credit Approval System")
-
-st.info("""
-💳 AI Credit Approval System  
-✔ Single Prediction  
-✔ Bulk Upload  
-✔ Intelligent Error Handling  
-✔ Data Quality Dashboard  
-""")
-
-# ---------------- TABS ---------------- #
-tab1, tab2 = st.tabs(["👤 Single Prediction", "🏢 Bulk Upload"])
+st.markdown('<div class="subtitle">AI Credit Approval System</div>', unsafe_allow_html=True)
 
 # ---------------- HELPERS ---------------- #
 def select_box(label, options):
     return st.selectbox(label, ["Select"] + list(options))
+
+def safe_encode(col, value):
+    classes = list(encoders[col].classes_)
+    value = str(value).strip().title()
+
+    if value in classes:
+        return encoders[col].transform([value])[0]
+
+    # fuzzy match
+    match = get_close_matches(value, classes, n=1, cutoff=0.6)
+    if match:
+        return encoders[col].transform([match[0]])[0]
+
+    return -1  # unseen safe fallback
 
 def get_sample_csv():
     df = pd.DataFrame({
@@ -56,8 +86,11 @@ def get_sample_csv():
     })
     return df.to_csv(index=False).encode("utf-8")
 
+# ---------------- TABS ---------------- #
+tab1, tab2 = st.tabs(["👤 Single Prediction", "🏢 Bulk Upload"])
+
 # =========================================================
-# 👤 SINGLE PREDICTION
+# 👤 SINGLE
 # =========================================================
 with tab1:
 
@@ -96,13 +129,13 @@ with tab1:
 
         credit_score_model = (900-credit_score_user)/100
 
-        df = pd.DataFrame([[
-            encoders['CODE_GENDER'].transform([gender])[0],
+        df = pd.DataFrame([[ 
+            safe_encode('CODE_GENDER', gender),
             income,
-            encoders['NAME_INCOME_TYPE'].transform([income_type])[0],
-            encoders['NAME_EDUCATION_TYPE'].transform([education])[0],
-            encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
-            encoders['OCCUPATION_TYPE'].transform([occupation])[0],
+            safe_encode('NAME_INCOME_TYPE', income_type),
+            safe_encode('NAME_EDUCATION_TYPE', education),
+            safe_encode('NAME_FAMILY_STATUS', family_status),
+            safe_encode('OCCUPATION_TYPE', occupation),
             family_members,
             credit_score_model
         ]], columns=[
@@ -122,14 +155,14 @@ with tab1:
             st.markdown(f'<div class="card error-card">⚠️ Rejected<br>{100-prob:.2f}% risk</div>',unsafe_allow_html=True)
 
         st.progress(int(prob))
-        st.info(f"📊 Your Credit Score: {credit_score_user}")
+        st.info(f"📊 Credit Score: {credit_score_user}")
 
 # =========================================================
-# 🏢 BULK UPLOAD
+# 🏢 BULK
 # =========================================================
 with tab2:
 
-    st.subheader("🏢 Enterprise Bulk Credit Evaluation System")
+    st.subheader("🏢 Bulk Credit Evaluation")
 
     st.download_button("📥 Sample CSV", get_sample_csv(), "sample.csv")
 
@@ -137,59 +170,30 @@ with tab2:
 
     if file:
 
-        if file.name.endswith(".csv"):
-            df = pd.read_csv(file)
-        else:
-            df = pd.read_excel(file)
+        df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-        st.write("### 📄 Uploaded Data")
+        st.write("### Preview")
         st.dataframe(df.head())
 
         # CLEAN
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip().str.title()
 
-        # FIX EDUCATION
-        df['NAME_EDUCATION_TYPE'] = df['NAME_EDUCATION_TYPE'].replace({
-            "Secondary":"Secondary / Secondary Special"
-        })
-
-        # STORE ORIGINAL SCORE
         df['CREDIT_SCORE_ORIGINAL'] = df['CREDIT_SCORE']
-
-        # CONVERT FOR MODEL
-        df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(
-            lambda x: (900-x)/100 if x > 10 else x
-        )
-
-        from difflib import get_close_matches
-
-        def fix(val, classes):
-            if val in classes:
-                return val
-            match = get_close_matches(val, classes, n=1, cutoff=0.6)
-            return match[0] if match else None
+        df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(lambda x: (900-x)/100 if x>10 else x)
 
         valid=[]
         errors=[]
 
         for _,row in df.iterrows():
             try:
-
-                def enc(col,val):
-                    classes = list(encoders[col].classes_)
-                    val = fix(val, classes)
-                    if val is None:
-                        raise ValueError(f"{col} invalid")
-                    return encoders[col].transform([val])[0]
-
                 row_data = [[
-                    enc('CODE_GENDER',row['CODE_GENDER']),
+                    safe_encode('CODE_GENDER',row['CODE_GENDER']),
                     row['AMT_INCOME_TOTAL'],
-                    enc('NAME_INCOME_TYPE',row['NAME_INCOME_TYPE']),
-                    enc('NAME_EDUCATION_TYPE',row['NAME_EDUCATION_TYPE']),
-                    enc('NAME_FAMILY_STATUS',row['NAME_FAMILY_STATUS']),
-                    enc('OCCUPATION_TYPE',row['OCCUPATION_TYPE']),
+                    safe_encode('NAME_INCOME_TYPE',row['NAME_INCOME_TYPE']),
+                    safe_encode('NAME_EDUCATION_TYPE',row['NAME_EDUCATION_TYPE']),
+                    safe_encode('NAME_FAMILY_STATUS',row['NAME_FAMILY_STATUS']),
+                    safe_encode('OCCUPATION_TYPE',row['OCCUPATION_TYPE']),
                     row['CNT_FAM_MEMBERS'],
                     row['CREDIT_SCORE']
                 ]]
@@ -203,7 +207,7 @@ with tab2:
                 pred = model.predict(temp)[0]
                 prob = model.predict_proba(temp)[0][1]*100
 
-                r = row.to_dict()
+                r=row.to_dict()
                 r["Prediction"]="Approved" if pred==1 else "Rejected"
                 r["Confidence (%)"]=round(prob,2)
                 r["Credit Score"]=row["CREDIT_SCORE_ORIGINAL"]
@@ -211,37 +215,36 @@ with tab2:
                 valid.append(r)
 
             except Exception as e:
-                er = row.to_dict()
+                er=row.to_dict()
                 er["Error"]=str(e)
                 errors.append(er)
 
-        valid_df = pd.DataFrame(valid)
-        error_df = pd.DataFrame(errors)
+        valid_df=pd.DataFrame(valid)
+        error_df=pd.DataFrame(errors)
 
+        # METRICS
         total=len(df)
         ok=len(valid_df)
         bad=len(error_df)
 
-        col1,col2,col3,col4 = st.columns(4)
-        col1.metric("Total", total)
-        col2.metric("Valid", ok)
-        col3.metric("Invalid", bad)
-        col4.metric("Quality %", round((ok/total)*100,2) if total>0 else 0)
+        c1,c2,c3,c4=st.columns(4)
+        c1.metric("Total",total)
+        c2.metric("Valid",ok)
+        c3.metric("Invalid",bad)
+        c4.metric("Quality %",round((ok/total)*100,2) if total>0 else 0)
 
-        # 🎨 COLOR FUNCTION
+        # COLOR ROWS
         def color_rows(row):
-            if row["Prediction"]=="Approved":
-                return ["background-color: #d4edda"]*len(row)
-            else:
-                return ["background-color: #f8d7da"]*len(row)
+            return ["background-color:#d4edda" if row["Prediction"]=="Approved"
+                    else "background-color:#f8d7da"]*len(row)
 
-        st.markdown("## ✅ Approved / Rejected Applications")
+        st.markdown("## ✅ Results")
 
         if not valid_df.empty:
-            st.dataframe(valid_df.style.apply(color_rows, axis=1))
-            st.download_button("⬇ Download Valid", valid_df.to_csv(index=False), "valid.csv")
+            st.dataframe(valid_df.style.apply(color_rows,axis=1))
+            st.download_button("⬇ Download Results", valid_df.to_csv(index=False), "results.csv")
 
-        st.markdown("## ❌ Invalid / Failed Records")
+        st.markdown("## ❌ Errors")
 
         if not error_df.empty:
             st.dataframe(error_df)
