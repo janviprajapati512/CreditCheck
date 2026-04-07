@@ -28,6 +28,14 @@ except:
 st.markdown('<div class="title">💳 CreditCheck AI</div>', unsafe_allow_html=True)
 st.markdown("### Enterprise Credit Approval System")
 
+st.info("""
+💳 AI Credit Approval System  
+✔ Single Prediction  
+✔ Bulk Upload  
+✔ Intelligent Error Handling  
+✔ Data Quality Dashboard  
+""")
+
 # ---------------- TABS ---------------- #
 tab1, tab2 = st.tabs(["👤 Single Prediction", "🏢 Bulk Upload"])
 
@@ -59,7 +67,7 @@ with tab1:
 
     with col1:
         gender = select_box("Gender", encoders['CODE_GENDER'].classes_)
-        income = st.number_input("Income ₹", min_value=0)
+        income = st.number_input("Income ($)", min_value=0)
 
     with col2:
         income_type = select_box("Income Type", encoders['NAME_INCOME_TYPE'].classes_)
@@ -86,7 +94,7 @@ with tab1:
 
     if st.button("Analyze", disabled=len(errors)>0):
 
-        credit_score = (900-credit_score_user)/100
+        credit_score_model = (900-credit_score_user)/100
 
         df = pd.DataFrame([[
             encoders['CODE_GENDER'].transform([gender])[0],
@@ -96,7 +104,7 @@ with tab1:
             encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
             encoders['OCCUPATION_TYPE'].transform([occupation])[0],
             family_members,
-            credit_score
+            credit_score_model
         ]], columns=[
             'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
             'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
@@ -106,21 +114,22 @@ with tab1:
         pred = model.predict(df)[0]
         prob = model.predict_proba(df)[0][1]*100
 
-        st.markdown("## Result")
+        st.markdown("## 📊 Result")
 
         if pred==1:
-            st.markdown(f'<div class="card success-card">Approved<br>{prob:.2f}%</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card success-card">🎉 Approved<br>{prob:.2f}%</div>',unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="card error-card">Rejected<br>{100-prob:.2f}% risk</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card error-card">⚠️ Rejected<br>{100-prob:.2f}% risk</div>',unsafe_allow_html=True)
 
         st.progress(int(prob))
+        st.info(f"📊 Your Credit Score: {credit_score_user}")
 
 # =========================================================
-# 🏢 ENTERPRISE BULK
+# 🏢 BULK UPLOAD
 # =========================================================
 with tab2:
 
-    st.subheader("Bulk Prediction")
+    st.subheader("🏢 Enterprise Bulk Credit Evaluation System")
 
     st.download_button("📥 Sample CSV", get_sample_csv(), "sample.csv")
 
@@ -133,20 +142,25 @@ with tab2:
         else:
             df = pd.read_excel(file)
 
+        st.write("### 📄 Uploaded Data")
         st.dataframe(df.head())
 
         # CLEAN
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip().str.title()
 
-        # AUTO FIX
+        # FIX EDUCATION
         df['NAME_EDUCATION_TYPE'] = df['NAME_EDUCATION_TYPE'].replace({
             "Secondary":"Secondary / Secondary Special"
         })
 
-        # CREDIT SCORE FIX
-        if df['CREDIT_SCORE'].max()>10:
-            df['CREDIT_SCORE'] = (900-df['CREDIT_SCORE'])/100
+        # STORE ORIGINAL SCORE
+        df['CREDIT_SCORE_ORIGINAL'] = df['CREDIT_SCORE']
+
+        # CONVERT FOR MODEL
+        df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(
+            lambda x: (900-x)/100 if x > 10 else x
+        )
 
         from difflib import get_close_matches
 
@@ -191,7 +205,8 @@ with tab2:
 
                 r = row.to_dict()
                 r["Prediction"]="Approved" if pred==1 else "Rejected"
-                r["Confidence"]=round(prob,2)
+                r["Confidence (%)"]=round(prob,2)
+                r["Credit Score"]=row["CREDIT_SCORE_ORIGINAL"]
 
                 valid.append(r)
 
@@ -207,17 +222,27 @@ with tab2:
         ok=len(valid_df)
         bad=len(error_df)
 
-        st.metric("Total", total)
-        st.metric("Valid", ok)
-        st.metric("Invalid", bad)
-        st.metric("Quality %", round((ok/total)*100,2) if total>0 else 0)
+        col1,col2,col3,col4 = st.columns(4)
+        col1.metric("Total", total)
+        col2.metric("Valid", ok)
+        col3.metric("Invalid", bad)
+        col4.metric("Quality %", round((ok/total)*100,2) if total>0 else 0)
 
-        st.markdown("### ✅ Valid Results")
+        # 🎨 COLOR FUNCTION
+        def color_rows(row):
+            if row["Prediction"]=="Approved":
+                return ["background-color: #d4edda"]*len(row)
+            else:
+                return ["background-color: #f8d7da"]*len(row)
+
+        st.markdown("## ✅ Approved / Rejected Applications")
+
         if not valid_df.empty:
-            st.dataframe(valid_df)
-            st.download_button("Download Valid", valid_df.to_csv(index=False), "valid.csv")
+            st.dataframe(valid_df.style.apply(color_rows, axis=1))
+            st.download_button("⬇ Download Valid", valid_df.to_csv(index=False), "valid.csv")
 
-        st.markdown("### ❌ Errors")
+        st.markdown("## ❌ Invalid / Failed Records")
+
         if not error_df.empty:
             st.dataframe(error_df)
-            st.download_button("Download Errors", error_df.to_csv(index=False), "errors.csv")
+            st.download_button("⬇ Download Errors", error_df.to_csv(index=False), "errors.csv")
