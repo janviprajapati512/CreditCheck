@@ -191,6 +191,9 @@ with tab1:
 # =========================================================
 # 🏢 BULK UPLOAD
 # =========================================================
+# =========================================================
+# 🏢 BULK UPLOAD
+# =========================================================
 with tab2:
 
     st.subheader("🏢 Bulk Credit Evaluation")
@@ -216,10 +219,10 @@ with tab2:
         # TRANSFORM FOR MODEL
         df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(lambda x: (900-x)/100 if x>10 else x)
 
-        valid=[]
-        errors=[]
+        valid = []
+        errors = []
 
-        for idx,row in df.iterrows():
+        for idx, row in df.iterrows():
             try:
                 temp = pd.DataFrame([[ 
                     safe_encode('CODE_GENDER',row['CODE_GENDER']),
@@ -239,63 +242,62 @@ with tab2:
                 pred = model.predict(temp)[0]
                 prob = model.predict_proba(temp)[0][1]*100
 
-                r=row.to_dict()
+                r = row.to_dict()
 
                 if pred == 1:
                     r["Prediction"] = "✅ Approved"
                 else:
                     r["Prediction"] = "❌ Rejected"
 
-                r["Confidence (%)"]=round(prob,2)
-                r["Credit Score"]=original_score[idx]
+                r["Confidence (%)"] = round(prob, 2)
+                r["Credit Score"] = original_score[idx]
 
                 valid.append(r)
 
             except Exception as e:
-                er=row.to_dict()
-                er["Error"]=str(e)
+                er = row.to_dict()
+                er["Error"] = str(e)
                 errors.append(er)
 
-        valid_df=pd.DataFrame(valid)
-        error_df=pd.DataFrame(errors)
+        valid_df = pd.DataFrame(valid)
+        error_df = pd.DataFrame(errors)
 
         # REMOVE MODEL SCORE
         valid_df.drop(columns=["CREDIT_SCORE"], inplace=True, errors="ignore")
 
         # METRICS
-        total=len(df)
-        ok=len(valid_df)
-        bad=len(error_df)
+        total = len(df)
+        ok = len(valid_df)
+        bad = len(error_df)
 
-        c1,c2,c3,c4=st.columns(4)
-        c1.metric("📊 Total",total)
-        c2.metric("✅ Valid",ok)
-        c3.metric("❌ Invalid",bad)
-        c4.metric("📈 Quality %",round((ok/total)*100,2) if total>0 else 0)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("📊 Total", total)
+        c2.metric("✅ Valid", ok)
+        c3.metric("❌ Invalid", bad)
+        c4.metric("📈 Quality %", round((ok/total)*100,2) if total>0 else 0)
 
-        # 🎨 PROFESSIONAL ROW COLORS
+        # 🎨 COLOR ROWS
         def color_rows(row):
             if "Approved" in row["Prediction"]:
                 return ["background-color:#f0fdf4; color:black; border-left:6px solid #16a34a"] * len(row)
             else:
                 return ["background-color:#fef2f2; color:black; border-left:6px solid #dc2626"] * len(row)
 
+        # ---------------- RESULTS ---------------- #
         st.markdown("## ✅ Results")
 
         if not valid_df.empty:
             st.dataframe(valid_df.style.apply(color_rows, axis=1))
             st.download_button("⬇ Download Results", valid_df.to_csv(index=False), "results.csv")
 
-        st.markdown("## ❌ Errors")
-
-       # ---------------- ERRORS SECTION ---------------- #
-if not error_df.empty:
-    st.markdown("## ❌ Errors")
-    st.dataframe(error_df)
-    st.download_button(
-        "⬇ Download Errors",
-        error_df.to_csv(index=False),
-        "errors.csv"
-    )
-else:
-    st.success("✅ No errors found — all records processed successfully")
+        # ---------------- ERRORS ---------------- #
+        if not error_df.empty:
+            st.markdown("## ❌ Errors")
+            st.dataframe(error_df)
+            st.download_button(
+                "⬇ Download Errors",
+                error_df.to_csv(index=False),
+                "errors.csv"
+            )
+        else:
+            st.success("✅ No errors found — all records processed successfully")
