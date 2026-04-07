@@ -6,51 +6,28 @@ from difflib import get_close_matches
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
 
-# ---------------- CLEAN BANKING UI ---------------- #
+# ---------------- CLEAN UI ---------------- #
 st.markdown("""
 <style>
-body {
-    background: #f4f6f9;
-}
-
-.title {
-    font-size: 38px;
-    font-weight: bold;
-    color: #1f3c88;
-    text-align: center;
-}
-
-.subtitle {
-    text-align:center;
-    color: #555;
-    margin-bottom: 25px;
-}
+body {background:#f4f6f9;}
+.title {font-size:38px;font-weight:bold;color:#1f3c88;text-align:center;}
+.subtitle {text-align:center;color:#555;margin-bottom:25px;}
 
 .card {
-    padding: 20px;
-    border-radius: 12px;
-    background: white;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    padding:20px;
+    border-radius:12px;
+    background:white;
+    box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
-.success-card {
-    background: #e6f4ea;
-    color: black;
-    font-weight: 600;
-}
-
-.error-card {
-    background: #fdecea;
-    color: black;
-    font-weight: 600;
-}
+.success-card {background:#e6f4ea;color:black;font-weight:600;}
+.error-card {background:#fdecea;color:black;font-weight:600;}
 
 .stButton>button {
-    background: #1f3c88;
-    color: white;
-    border-radius: 8px;
+    background:#1f3c88;
+    color:white;
+    border-radius:8px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,7 +54,7 @@ def safe_encode(col, value):
     if match:
         return encoders[col].transform([match[0]])[0]
 
-    return -1
+    return -1  # unseen safe
 
 def get_sample_csv():
     df = pd.DataFrame({
@@ -119,6 +96,7 @@ with tab1:
     family_members = st.slider("Family Members",1,10,2)
     credit_score_user = st.slider("Credit Score",300,900,650)
 
+    # VALIDATION
     errors = []
     if gender=="Select": errors.append("Gender")
     if income<=0: errors.append("Income")
@@ -180,16 +158,20 @@ with tab2:
         st.write("### 📄 Preview")
         st.dataframe(df.head())
 
+        # CLEAN
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip().str.title()
 
-        df['CREDIT_SCORE_ORIGINAL'] = df['CREDIT_SCORE']
+        # STORE ORIGINAL SCORE
+        original_score = df['CREDIT_SCORE'].copy()
+
+        # TRANSFORM FOR MODEL
         df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(lambda x: (900-x)/100 if x>10 else x)
 
         valid=[]
         errors=[]
 
-        for _,row in df.iterrows():
+        for idx,row in df.iterrows():
             try:
                 temp = pd.DataFrame([[ 
                     safe_encode('CODE_GENDER',row['CODE_GENDER']),
@@ -212,7 +194,7 @@ with tab2:
                 r=row.to_dict()
                 r["Prediction"]="Approved" if pred==1 else "Rejected"
                 r["Confidence (%)"]=round(prob,2)
-                r["Credit Score"]=row["CREDIT_SCORE_ORIGINAL"]
+                r["Credit Score"]=original_score[idx]
 
                 valid.append(r)
 
@@ -223,6 +205,9 @@ with tab2:
 
         valid_df=pd.DataFrame(valid)
         error_df=pd.DataFrame(errors)
+
+        # REMOVE MODEL SCORE COLUMN
+        valid_df.drop(columns=["CREDIT_SCORE"], inplace=True, errors="ignore")
 
         # METRICS
         total=len(df)
@@ -235,7 +220,7 @@ with tab2:
         c3.metric("Invalid",bad)
         c4.metric("Quality %",round((ok/total)*100,2) if total>0 else 0)
 
-        # 🎨 CLEAN COLOR (SOFT + BLACK TEXT)
+        # COLOR ROWS
         def color_rows(row):
             if row["Prediction"] == "Approved":
                 return ["background-color:#e6f4ea; color:black"] * len(row)
