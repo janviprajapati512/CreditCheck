@@ -6,44 +6,51 @@ from difflib import get_close_matches
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
 
-# ---------------- PREMIUM UI ---------------- #
+# ---------------- CLEAN BANKING UI ---------------- #
 st.markdown("""
 <style>
 body {
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    background: #f4f6f9;
 }
+
 .title {
-    font-size: 42px;
-    font-weight: 800;
-    color: white;
+    font-size: 38px;
+    font-weight: bold;
+    color: #1f3c88;
     text-align: center;
 }
+
 .subtitle {
     text-align:center;
-    color: #cfd8dc;
+    color: #555;
     margin-bottom: 25px;
 }
+
 .card {
     padding: 20px;
-    border-radius: 15px;
+    border-radius: 12px;
     background: white;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
+
 .success-card {
-    background: linear-gradient(135deg, #00b09b, #96c93d);
-    color: white;
-    font-size: 18px;
+    background: #e6f4ea;
+    color: black;
+    font-weight: 600;
 }
+
 .error-card {
-    background: linear-gradient(135deg, #ff416c, #ff4b2b);
-    color: white;
-    font-size: 18px;
+    background: #fdecea;
+    color: black;
+    font-weight: 600;
 }
+
 .stButton>button {
-    background: linear-gradient(135deg, #1f3c88, #00c6ff);
+    background: #1f3c88;
     color: white;
-    border-radius: 10px;
+    border-radius: 8px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,7 +60,7 @@ encoders = joblib.load("encoders.pkl")
 
 # ---------------- HEADER ---------------- #
 st.markdown('<div class="title">💳 CreditCheck AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI Credit Approval System</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Enterprise Credit Approval System</div>', unsafe_allow_html=True)
 
 # ---------------- HELPERS ---------------- #
 def select_box(label, options):
@@ -66,12 +73,11 @@ def safe_encode(col, value):
     if value in classes:
         return encoders[col].transform([value])[0]
 
-    # fuzzy match
     match = get_close_matches(value, classes, n=1, cutoff=0.6)
     if match:
         return encoders[col].transform([match[0]])[0]
 
-    return -1  # unseen safe fallback
+    return -1
 
 def get_sample_csv():
     df = pd.DataFrame({
@@ -90,7 +96,7 @@ def get_sample_csv():
 tab1, tab2 = st.tabs(["👤 Single Prediction", "🏢 Bulk Upload"])
 
 # =========================================================
-# 👤 SINGLE
+# 👤 SINGLE PREDICTION
 # =========================================================
 with tab1:
 
@@ -113,7 +119,6 @@ with tab1:
     family_members = st.slider("Family Members",1,10,2)
     credit_score_user = st.slider("Credit Score",300,900,650)
 
-    # VALIDATION
     errors = []
     if gender=="Select": errors.append("Gender")
     if income<=0: errors.append("Income")
@@ -150,15 +155,15 @@ with tab1:
         st.markdown("## 📊 Result")
 
         if pred==1:
-            st.markdown(f'<div class="card success-card">🎉 Approved<br>{prob:.2f}%</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card success-card">🎉 Approved<br>Confidence: {prob:.2f}%</div>',unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="card error-card">⚠️ Rejected<br>{100-prob:.2f}% risk</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card error-card">⚠️ Rejected<br>Risk: {100-prob:.2f}%</div>',unsafe_allow_html=True)
 
         st.progress(int(prob))
         st.info(f"📊 Credit Score: {credit_score_user}")
 
 # =========================================================
-# 🏢 BULK
+# 🏢 BULK UPLOAD
 # =========================================================
 with tab2:
 
@@ -172,10 +177,9 @@ with tab2:
 
         df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-        st.write("### Preview")
+        st.write("### 📄 Preview")
         st.dataframe(df.head())
 
-        # CLEAN
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip().str.title()
 
@@ -187,7 +191,7 @@ with tab2:
 
         for _,row in df.iterrows():
             try:
-                row_data = [[
+                temp = pd.DataFrame([[ 
                     safe_encode('CODE_GENDER',row['CODE_GENDER']),
                     row['AMT_INCOME_TOTAL'],
                     safe_encode('NAME_INCOME_TYPE',row['NAME_INCOME_TYPE']),
@@ -196,9 +200,7 @@ with tab2:
                     safe_encode('OCCUPATION_TYPE',row['OCCUPATION_TYPE']),
                     row['CNT_FAM_MEMBERS'],
                     row['CREDIT_SCORE']
-                ]]
-
-                temp = pd.DataFrame(row_data, columns=[
+                ]], columns=[
                     'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
                     'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
                     'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
@@ -233,10 +235,12 @@ with tab2:
         c3.metric("Invalid",bad)
         c4.metric("Quality %",round((ok/total)*100,2) if total>0 else 0)
 
-        # COLOR ROWS
+        # 🎨 CLEAN COLOR (SOFT + BLACK TEXT)
         def color_rows(row):
-            return ["background-color:#d4edda" if row["Prediction"]=="Approved"
-                    else "background-color:#f8d7da"]*len(row)
+            if row["Prediction"] == "Approved":
+                return ["background-color:#e6f4ea; color:black"] * len(row)
+            else:
+                return ["background-color:#fdecea; color:black"] * len(row)
 
         st.markdown("## ✅ Results")
 
