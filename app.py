@@ -232,10 +232,3 @@ with tab2:
         if not valid_df.empty:
             st.dataframe(valid_df.style.apply(color_rows,axis=1))
             st.download_button("⬇ Download Results", valid_df.to_csv(index=False), "results.csv")
-
-        if error:
-            st.markdown("## ❌ Errors")
-
-        if not error_df.empty:
-            st.dataframe(error_df)
-            st.download_button("⬇ Download Errors", error_df.to_csv(index=False), "errors.csv")
