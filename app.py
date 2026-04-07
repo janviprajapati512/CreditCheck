@@ -11,26 +11,22 @@ st.markdown("""
 .main {
     background: linear-gradient(to right, #f8f9fa, #e9ecef);
 }
-
 .title {
     font-size: 40px;
     font-weight: bold;
     color: #1f3c88;
 }
-
 .card {
     padding: 20px;
     border-radius: 15px;
     background: white;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    margin-bottom: 15px;
+    margin-top: 15px;
 }
-
 .success-card {
     background-color: #d4edda;
     color: #155724;
 }
-
 .error-card {
     background-color: #f8d7da;
     color: #721c24;
@@ -94,8 +90,35 @@ with tab1:
     family_members = st.slider("Family Members", 1, 10, 2)
     credit_score_user = st.slider("Credit Score", 300, 900, 650)
 
-    # ---------------- BUTTON ---------------- #
-    if st.button("🔍 Analyze Credit Profile"):
+    # ---------------- REAL-TIME VALIDATION ---------------- #
+    errors = []
+
+    if gender == "Select":
+        errors.append("Gender")
+
+    if income <= 0:
+        errors.append("Income")
+
+    if income_type == "Select":
+        errors.append("Income Type")
+
+    if education == "Select":
+        errors.append("Education")
+
+    if family_status == "Select":
+        errors.append("Family Status")
+
+    if occupation == "Select":
+        errors.append("Occupation")
+
+    # Show inline warning
+    if errors:
+        st.warning(f"⚠️ Please fill: {', '.join(errors)}")
+
+    # ---------------- SMART BUTTON ---------------- #
+    is_valid = len(errors) == 0
+
+    if st.button("🔍 Analyze Credit Profile", disabled=not is_valid):
 
         try:
             credit_score = (900 - credit_score_user) / 100
@@ -118,12 +141,19 @@ with tab1:
             pred = model.predict(data)[0]
             prob = model.predict_proba(data)[0][1] * 100
 
+            # ---------------- RESULT UI ---------------- #
             st.markdown("## 📊 Result")
 
             if pred == 1:
-                st.markdown(f'<div class="card success-card">🎉 APPROVED<br>Confidence: {prob:.2f}%</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="card success-card">🎉 APPROVED<br>Confidence: {prob:.2f}%</div>',
+                    unsafe_allow_html=True
+                )
             else:
-                st.markdown(f'<div class="card error-card">⚠️ REJECTED<br>Risk: {100-prob:.2f}%</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="card error-card">⚠️ REJECTED<br>Risk: {100-prob:.2f}%</div>',
+                    unsafe_allow_html=True
+                )
 
             st.progress(int(prob))
 
@@ -138,6 +168,7 @@ with tab2:
 
     st.markdown("### 📂 Bulk CSV Prediction")
 
+    # Sample download
     st.download_button(
         "📥 Download Sample CSV",
         data=get_sample_csv(),
@@ -152,9 +183,11 @@ with tab2:
             df = pd.read_csv(file)
             st.dataframe(df.head())
 
+            # Convert credit score
             if df['CREDIT_SCORE'].max() > 10:
                 df['CREDIT_SCORE'] = (900 - df['CREDIT_SCORE']) / 100
 
+            # Encoding
             df['CODE_GENDER'] = encoders['CODE_GENDER'].transform(df['CODE_GENDER'])
             df['NAME_INCOME_TYPE'] = encoders['NAME_INCOME_TYPE'].transform(df['NAME_INCOME_TYPE'])
             df['NAME_EDUCATION_TYPE'] = encoders['NAME_EDUCATION_TYPE'].transform(df['NAME_EDUCATION_TYPE'])
@@ -162,7 +195,7 @@ with tab2:
             df['OCCUPATION_TYPE'] = encoders['OCCUPATION_TYPE'].transform(df['OCCUPATION_TYPE'])
 
             preds = model.predict(df)
-            probs = model.predict_proba(df)[:,1] * 100
+            probs = model.predict_proba(df)[:, 1] * 100
 
             df['Prediction'] = ["Approved" if p == 1 else "Rejected" for p in preds]
             df['Confidence (%)'] = probs.round(2)
@@ -170,9 +203,11 @@ with tab2:
             st.success("✅ Prediction Complete")
             st.dataframe(df)
 
+            # Chart
             st.write("### 📊 Summary")
             st.bar_chart(df['Prediction'].value_counts())
 
+            # Download
             csv = df.to_csv(index=False).encode('utf-8')
 
             st.download_button(
