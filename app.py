@@ -288,9 +288,14 @@ with tab2:
 
         st.markdown("## ❌ Errors")
 
-       if not error_df.empty:
-            st.markdown("## ❌ Errors")
-            st.dataframe(error_df)
-            st.download_button("⬇ Download Errors", error_df.to_csv(index=False), "errors.csv")    
-        else:
-            st.success("✅ No errors found — all records processed successfully")
+       # ---------------- ERRORS SECTION ---------------- #
+if not error_df.empty:
+    st.markdown("## ❌ Errors")
+    st.dataframe(error_df)
+    st.download_button(
+        "⬇ Download Errors",
+        error_df.to_csv(index=False),
+        "errors.csv"
+    )
+else:
+    st.success("✅ No errors found — all records processed successfully")
