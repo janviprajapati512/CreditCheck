@@ -6,13 +6,25 @@ from difflib import get_close_matches
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
 
-# ---------------- CLEAN UI ---------------- #
+# ---------------- PREMIUM UI ---------------- #
 st.markdown("""
 <style>
 body {background:#f4f6f9;}
-.title {font-size:38px;font-weight:bold;color:#1f3c88;text-align:center;}
-.subtitle {text-align:center;color:#555;margin-bottom:25px;}
 
+.title {
+    font-size:38px;
+    font-weight:bold;
+    color:#1f3c88;
+    text-align:center;
+}
+
+.subtitle {
+    text-align:center;
+    color:#555;
+    margin-bottom:20px;
+}
+
+/* Cards */
 .card {
     padding:20px;
     border-radius:12px;
@@ -20,14 +32,50 @@ body {background:#f4f6f9;}
     box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
-.success-card {background:#e6f4ea;color:black;font-weight:600;}
-.error-card {background:#fdecea;color:black;font-weight:600;}
+.success-card {
+    background:#e6f4ea;
+    color:black;
+    font-weight:600;
+}
 
+.error-card {
+    background:#fdecea;
+    color:black;
+    font-weight:600;
+}
+
+/* Button */
 .stButton>button {
     background:#1f3c88;
     color:white;
     border-radius:8px;
 }
+
+/* Table header */
+thead tr th {
+    background-color:#1f3c88 !important;
+    color:white !important;
+    text-align:center !important;
+}
+
+/* Table cells */
+tbody tr td {
+    text-align:center !important;
+}
+
+/* Hover */
+tbody tr:hover {
+    background-color:#eef2ff !important;
+}
+
+/* Metrics */
+[data-testid="stMetric"] {
+    background:white;
+    padding:15px;
+    border-radius:10px;
+    box-shadow:0px 2px 8px rgba(0,0,0,0.1);
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,7 +102,7 @@ def safe_encode(col, value):
     if match:
         return encoders[col].transform([match[0]])[0]
 
-    return -1  # unseen safe
+    return -1
 
 def get_sample_csv():
     df = pd.DataFrame({
@@ -133,9 +181,9 @@ with tab1:
         st.markdown("## 📊 Result")
 
         if pred==1:
-            st.markdown(f'<div class="card success-card">🎉 Approved<br>Confidence: {prob:.2f}%</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card success-card">✅ Approved<br>Confidence: {prob:.2f}%</div>',unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="card error-card">⚠️ Rejected<br>Risk: {100-prob:.2f}%</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="card error-card">❌ Rejected<br>Risk: {100-prob:.2f}%</div>',unsafe_allow_html=True)
 
         st.progress(int(prob))
         st.info(f"📊 Credit Score: {credit_score_user}")
@@ -153,7 +201,7 @@ with tab2:
 
     if file:
 
-        df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+        df = pd.read_csv(file)
 
         st.write("### 📄 Preview")
         st.dataframe(df.head())
@@ -162,7 +210,7 @@ with tab2:
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip().str.title()
 
-        # STORE ORIGINAL SCORE
+        # SAVE ORIGINAL SCORE
         original_score = df['CREDIT_SCORE'].copy()
 
         # TRANSFORM FOR MODEL
@@ -192,7 +240,12 @@ with tab2:
                 prob = model.predict_proba(temp)[0][1]*100
 
                 r=row.to_dict()
-                r["Prediction"]="Approved" if pred==1 else "Rejected"
+
+                if pred == 1:
+                    r["Prediction"] = "✅ Approved"
+                else:
+                    r["Prediction"] = "❌ Rejected"
+
                 r["Confidence (%)"]=round(prob,2)
                 r["Credit Score"]=original_score[idx]
 
@@ -206,7 +259,7 @@ with tab2:
         valid_df=pd.DataFrame(valid)
         error_df=pd.DataFrame(errors)
 
-        # REMOVE MODEL SCORE COLUMN
+        # REMOVE MODEL SCORE
         valid_df.drop(columns=["CREDIT_SCORE"], inplace=True, errors="ignore")
 
         # METRICS
@@ -215,20 +268,29 @@ with tab2:
         bad=len(error_df)
 
         c1,c2,c3,c4=st.columns(4)
-        c1.metric("Total",total)
-        c2.metric("Valid",ok)
-        c3.metric("Invalid",bad)
-        c4.metric("Quality %",round((ok/total)*100,2) if total>0 else 0)
+        c1.metric("📊 Total",total)
+        c2.metric("✅ Valid",ok)
+        c3.metric("❌ Invalid",bad)
+        c4.metric("📈 Quality %",round((ok/total)*100,2) if total>0 else 0)
 
-        # COLOR ROWS
+        # 🎨 PROFESSIONAL ROW COLORS
         def color_rows(row):
-            if row["Prediction"] == "Approved":
-                return ["background-color:#e6f4ea; color:black"] * len(row)
+            if "Approved" in row["Prediction"]:
+                return ["background-color:#f0fdf4; color:black; border-left:6px solid #16a34a"] * len(row)
             else:
-                return ["background-color:#fdecea; color:black"] * len(row)
+                return ["background-color:#fef2f2; color:black; border-left:6px solid #dc2626"] * len(row)
 
         st.markdown("## ✅ Results")
 
         if not valid_df.empty:
-            st.dataframe(valid_df.style.apply(color_rows,axis=1))
+            st.dataframe(valid_df.style.apply(color_rows, axis=1))
             st.download_button("⬇ Download Results", valid_df.to_csv(index=False), "results.csv")
+
+        st.markdown("## ❌ Errors")
+
+       if not error_df.empty:
+            st.markdown("## ❌ Errors")
+            st.dataframe(error_df)
+            st.download_button("⬇ Download Errors", error_df.to_csv(index=False), "errors.csv")    
+        else:
+            st.success("✅ No errors found — all records processed successfully")
