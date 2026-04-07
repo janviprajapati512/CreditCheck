@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import joblib
@@ -16,15 +15,12 @@ st.set_page_config(page_title="CreditCheck AI", page_icon="💳")
 
 # ---------------- HEADER ---------------- #
 st.title("💳 CreditCheck AI")
-st.markdown("### Simple Credit Approval System")
+st.markdown("### Credit Card Approval System")
 
-st.info("""
-✔ Enter your details  
-✔ System checks your profile  
-✔ Shows approval result with reason + suggestions  
-""")
+# ---------------- TABS ---------------- #
+tab1, tab2 = st.tabs(["👤 Single Prediction", "📂 Bulk CSV Upload"])
 
-# ---------------- CREDIT LABEL ---------------- #
+# ---------------- COMMON FUNCTIONS ---------------- #
 def get_score_label(score):
     if score < 500:
         return "🔴 Poor"
@@ -35,164 +31,176 @@ def get_score_label(score):
     else:
         return "🟢 Excellent"
 
-# ---------------- DROPDOWN HELPER ---------------- #
 def select_with_placeholder(label, options):
     return st.selectbox(label, ["-- Please Select --"] + list(options))
 
-# ---------------- INPUT ---------------- #
-gender = select_with_placeholder("👤 Gender *", encoders['CODE_GENDER'].classes_)
-income = st.number_input("💰 Annual Income ($) *", min_value=0)
+# =========================================================
+# 👤 TAB 1 - SINGLE PREDICTION
+# =========================================================
+with tab1:
 
-income_type = select_with_placeholder("💼 Income Type *", encoders['NAME_INCOME_TYPE'].classes_)
-education = select_with_placeholder("🎓 Education *", encoders['NAME_EDUCATION_TYPE'].classes_)
-family_status = select_with_placeholder("👨‍👩‍👧 Family Status *", encoders['NAME_FAMILY_STATUS'].classes_)
-occupation = select_with_placeholder("🧑‍💼 Occupation *", encoders['OCCUPATION_TYPE'].classes_)
+    st.subheader("Enter Applicant Details")
 
-family_members = st.number_input("👨‍👩‍👧‍👦 Family Members *", min_value=1)
+    gender = select_with_placeholder("👤 Gender *", encoders['CODE_GENDER'].classes_)
+    income = st.number_input("💰 Annual Income (₹) *", min_value=0)
 
-credit_score_user = st.slider(
-    "📊 Credit Score (300 = poor, 900 = excellent) *",
-    300, 900, 650
-)
+    income_type = select_with_placeholder("💼 Income Type *", encoders['NAME_INCOME_TYPE'].classes_)
+    education = select_with_placeholder("🎓 Education *", encoders['NAME_EDUCATION_TYPE'].classes_)
+    family_status = select_with_placeholder("👨‍👩‍👧 Family Status *", encoders['NAME_FAMILY_STATUS'].classes_)
+    occupation = select_with_placeholder("🧑‍💼 Occupation *", encoders['OCCUPATION_TYPE'].classes_)
 
-st.write(f"Score Category: {get_score_label(credit_score_user)}")
+    family_members = st.number_input("👨‍👩‍👧‍👦 Family Members *", min_value=1)
 
-# ---------------- VALIDATION ---------------- #
-errors = []
+    credit_score_user = st.slider(
+        "📊 Credit Score (300 - 900) *",
+        300, 900, 650
+    )
 
-if gender == "-- Please Select --":
-    errors.append("Select Gender")
+    st.write(f"Score Category: {get_score_label(credit_score_user)}")
 
-if income <= 0:
-    errors.append("Income must be greater than 0")
+    # ---------------- VALIDATION ---------------- #
+    errors = []
 
-if income_type == "-- Please Select --":
-    errors.append("Select Income Type")
+    if gender == "-- Please Select --":
+        errors.append("Select Gender")
 
-if education == "-- Please Select --":
-    errors.append("Select Education")
+    if income <= 0:
+        errors.append("Income must be greater than 0")
 
-if family_status == "-- Please Select --":
-    errors.append("Select Family Status")
+    if income_type == "-- Please Select --":
+        errors.append("Select Income Type")
 
-if occupation == "-- Please Select --":
-    errors.append("Select Occupation")
+    if education == "-- Please Select --":
+        errors.append("Select Education")
 
-if family_members <= 0:
-    errors.append("Family members must be at least 1")
+    if family_status == "-- Please Select --":
+        errors.append("Select Family Status")
 
-# Show errors
-if errors:
+    if occupation == "-- Please Select --":
+        errors.append("Select Occupation")
+
+    if family_members <= 0:
+        errors.append("Family members must be at least 1")
+
     for e in errors:
         st.error(f"❌ {e}")
 
-# ---------------- BUTTON ---------------- #
-is_valid = len(errors) == 0
+    # ---------------- BUTTON ---------------- #
+    if st.button("🔍 Check Approval", disabled=len(errors) > 0):
 
-if st.button("🔍 Check Approval", disabled=not is_valid):
+        with st.spinner("🔄 Checking..."):
 
-    with st.spinner("🔄 Checking your credit profile..."):
+            try:
+                credit_score = (900 - credit_score_user) / 100
+
+                user_data = [
+                    encoders['CODE_GENDER'].transform([gender])[0],
+                    income,
+                    encoders['NAME_INCOME_TYPE'].transform([income_type])[0],
+                    encoders['NAME_EDUCATION_TYPE'].transform([education])[0],
+                    encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
+                    encoders['OCCUPATION_TYPE'].transform([occupation])[0],
+                    family_members,
+                    credit_score
+                ]
+
+                columns = [
+                    'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
+                    'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
+                    'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
+                ]
+
+                df = pd.DataFrame([user_data], columns=columns)
+
+                pred = model.predict(df)[0]
+
+                try:
+                    prob = model.predict_proba(df)[0][1] * 100
+                except:
+                    prob = None
+
+                st.markdown("## 📊 Result")
+
+                if pred == 1:
+                    st.success(f"🎉 Approved ({prob:.2f}% confidence)" if prob else "🎉 Approved")
+                else:
+                    st.error(f"⚠️ Rejected ({100 - prob:.2f}% risk)" if prob else "⚠️ Rejected")
+
+            except Exception as e:
+                st.error("❌ Prediction failed")
+                st.write(str(e))
+
+# =========================================================
+# 📂 TAB 2 - BULK CSV UPLOAD
+# =========================================================
+with tab2:
+
+    st.subheader("Upload CSV for Bulk Prediction")
+
+    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+
+    if uploaded_file is not None:
 
         try:
-            # ---------------- DATA PREP ---------------- #
-            credit_score = (900 - credit_score_user) / 100
+            df = pd.read_csv(uploaded_file)
 
-            user_data = [
-                encoders['CODE_GENDER'].transform([gender])[0],
-                income,
-                encoders['NAME_INCOME_TYPE'].transform([income_type])[0],
-                encoders['NAME_EDUCATION_TYPE'].transform([education])[0],
-                encoders['NAME_FAMILY_STATUS'].transform([family_status])[0],
-                encoders['OCCUPATION_TYPE'].transform([occupation])[0],
-                family_members,
-                credit_score
-            ]
+            st.write("### 📄 Preview")
+            st.dataframe(df.head())
 
-            columns = [
+            required_columns = [
                 'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
                 'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
                 'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
             ]
 
-            df = pd.DataFrame([user_data], columns=columns)
+            missing = [col for col in required_columns if col not in df.columns]
 
-            # ---------------- PREDICTION ---------------- #
-            pred = model.predict(df)[0]
+            if missing:
+                st.error(f"❌ Missing columns: {missing}")
+                st.stop()
+
+            # Convert credit score (if user uploads 300–900)
+            if df['CREDIT_SCORE'].max() > 10:
+                df['CREDIT_SCORE'] = (900 - df['CREDIT_SCORE']) / 100
+
+            # Encoding
+            df['CODE_GENDER'] = encoders['CODE_GENDER'].transform(df['CODE_GENDER'])
+            df['NAME_INCOME_TYPE'] = encoders['NAME_INCOME_TYPE'].transform(df['NAME_INCOME_TYPE'])
+            df['NAME_EDUCATION_TYPE'] = encoders['NAME_EDUCATION_TYPE'].transform(df['NAME_EDUCATION_TYPE'])
+            df['NAME_FAMILY_STATUS'] = encoders['NAME_FAMILY_STATUS'].transform(df['NAME_FAMILY_STATUS'])
+            df['OCCUPATION_TYPE'] = encoders['OCCUPATION_TYPE'].transform(df['OCCUPATION_TYPE'])
+
+            # Prediction
+            preds = model.predict(df)
 
             try:
-                prob = model.predict_proba(df)[0][1] * 100
+                probs = model.predict_proba(df)[:, 1] * 100
             except:
-                prob = None
+                probs = None
 
-            # ---------------- RESULT ---------------- #
-            st.markdown("## 📊 Result")
+            df['Prediction'] = ["Approved" if p == 1 else "Rejected" for p in preds]
 
-            if pred == 1:
-                if prob:
-                    st.success(f"🎉 Approved (Confidence: {prob:.2f}%)")
-                else:
-                    st.success("🎉 Approved")
-            else:
-                if prob:
-                    st.error(f"⚠️ Rejected (Risk: {100 - prob:.2f}%)")
-                else:
-                    st.error("⚠️ Rejected")
+            if probs is not None:
+                df['Confidence (%)'] = probs.round(2)
 
-            # ---------------- CONFIDENCE BAR ---------------- #
-            if prob:
-                st.progress(int(prob))
-                st.write(f"Confidence Score: {prob:.2f}%")
+            # Show results
+            st.write("### ✅ Results")
+            st.dataframe(df)
 
-            # ---------------- WHY ---------------- #
-            st.markdown("### 🧠 Why this decision?")
+            # Summary
+            st.write("### 📊 Summary")
+            st.write(df['Prediction'].value_counts())
 
-            reasons = []
+            # Download button
+            csv = df.to_csv(index=False).encode('utf-8')
 
-            if credit_score_user < 600:
-                reasons.append("Low credit score")
-
-            if income < 30000:
-                reasons.append("Low income")
-
-            if family_members > 5:
-                reasons.append("High financial responsibility")
-
-            if credit_score_user > 750:
-                reasons.append("Strong credit history")
-
-            if income > 50000:
-                reasons.append("Good income level")
-
-            if not reasons:
-                reasons.append("Based on overall profile")
-
-            for r in reasons:
-                st.write(f"• {r}")
-
-            # ---------------- IMPROVEMENTS ---------------- #
-            st.markdown("### 🚀 How to improve your chances")
-
-            suggestions = []
-
-            if credit_score_user < 750:
-                suggestions.append("Improve credit score by paying bills on time")
-
-            if income < 30000:
-                suggestions.append("Increase income through better job or side hustle")
-
-            if family_members > 5:
-                suggestions.append("Reduce financial liabilities if possible")
-
-            if credit_score_user < 500:
-                suggestions.append("Avoid late payments and reduce loan defaults")
-
-            if not suggestions:
-                suggestions.append("Your profile is strong. Maintain good financial habits")
-
-            for s in suggestions:
-                st.write(f"✔ {s}")
+            st.download_button(
+                "⬇ Download Results",
+                data=csv,
+                file_name="credit_results.csv",
+                mime="text/csv"
+            )
 
         except Exception as e:
-            st.error("❌ Prediction failed")
+            st.error("❌ Error processing file")
             st.write(str(e))
-
