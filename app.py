@@ -6,43 +6,43 @@ from difflib import get_close_matches
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
 
-# ---------------- CLEAN ENTERPRISE UI ---------------- #
+# ---------------- DARK ENTERPRISE UI ---------------- #
 st.markdown("""
 <style>
-body {background:#f4f6f9;}
+body {background:#0e1117; color:white;}
 
 .title {
     font-size:36px;
     font-weight:bold;
-    color:#1f3c88;
+    color:#4da6ff;
     text-align:center;
 }
 
 .subtitle {
     text-align:center;
-    color:#666;
+    color:#aaa;
     margin-bottom:25px;
-}
-
-/* Cards */
-.card {
-    padding:18px;
-    border-radius:10px;
-    background:white;
-    box-shadow:0 2px 8px rgba(0,0,0,0.08);
 }
 
 /* Buttons */
 .stButton>button {
-    background:#1f3c88;
-    color:white;
+    background:#4da6ff;
+    color:black;
     border-radius:6px;
-    font-weight:500;
+}
+
+/* Metrics (FIXED DARK) */
+[data-testid="stMetric"] {
+    background:#0e1117;
+    color:white;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #2a2f3a;
 }
 
 /* Table Header */
 thead tr th {
-    background-color:#1f3c88 !important;
+    background-color:#1f2937 !important;
     color:white !important;
     text-align:center !important;
 }
@@ -53,19 +53,10 @@ tbody tr td {
     font-size:14px;
 }
 
-/* Row Highlight (Subtle) */
+/* Hover */
 tbody tr:hover {
-    background-color:#f1f5ff !important;
+    background-color:#1e293b !important;
 }
-
-/* Metrics */
-[data-testid="stMetric"] {
-    background:white;
-    padding:12px;
-    border-radius:8px;
-    box-shadow:0px 1px 6px rgba(0,0,0,0.08);
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -167,10 +158,10 @@ with tab1:
         pred = model.predict(df)[0]
         prob = model.predict_proba(df)[0][1]*100
 
-        st.markdown("### Result")
-
         decision = "Approved" if pred==1 else "Rejected"
-        st.success(f"Decision: {decision}")
+
+        st.markdown("### Result")
+        st.write(f"Decision: {decision}")
         st.write(f"Confidence: {prob:.2f}%")
         st.progress(int(prob))
 
@@ -223,9 +214,11 @@ with tab2:
                 prob = model.predict_proba(temp)[0][1]*100
 
                 r = row.to_dict()
+
+                # ✅ Correct order
+                r["Credit Score"] = original_score[idx]
                 r["Decision"] = "Approved" if pred==1 else "Rejected"
                 r["Confidence (%)"] = round(prob,2)
-                r["Credit Score"] = original_score[idx]
 
                 valid.append(r)
 
@@ -239,6 +232,11 @@ with tab2:
 
         valid_df.drop(columns=["CREDIT_SCORE"], inplace=True, errors="ignore")
 
+        # ✅ FORCE COLUMN ORDER
+        if not valid_df.empty:
+            cols = [c for c in valid_df.columns if c not in ["Credit Score","Decision","Confidence (%)"]]
+            valid_df = valid_df[cols + ["Credit Score","Decision","Confidence (%)"]]
+
         # METRICS
         total=len(df)
         ok=len(valid_df)
@@ -250,14 +248,14 @@ with tab2:
         c3.metric("Invalid", bad)
         c4.metric("Quality %", round((ok/total)*100,2) if total>0 else 0)
 
-        # ---------------- RESULTS ---------------- #
+        # RESULTS
         st.markdown("### Results")
 
         if not valid_df.empty:
             st.dataframe(valid_df)
             st.download_button("Download Results", valid_df.to_csv(index=False), "results.csv")
 
-        # ---------------- ERRORS ---------------- #
+        # ERRORS
         if not error_df.empty:
             st.markdown("### Errors")
             st.dataframe(error_df)
