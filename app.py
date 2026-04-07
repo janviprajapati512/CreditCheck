@@ -149,7 +149,7 @@ with tab2:
 
     st.download_button("📥 Sample CSV", get_sample_csv(), "sample.csv")
 
-    file = st.file_uploader("Upload CSV/Excel", type=["csv","xlsx"])
+    file = st.file_uploader("Upload CSV", type=["csv"])
 
     if file:
 
@@ -233,7 +233,8 @@ with tab2:
             st.dataframe(valid_df.style.apply(color_rows,axis=1))
             st.download_button("⬇ Download Results", valid_df.to_csv(index=False), "results.csv")
 
-        st.markdown("## ❌ Errors")
+        if error:
+            st.markdown("## ❌ Errors")
 
         if not error_df.empty:
             st.dataframe(error_df)
