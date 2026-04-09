@@ -6,29 +6,33 @@ import matplotlib.pyplot as plt
 from difflib import get_close_matches
 
 # ---------------- CONFIG ---------------- #
-st.set_page_config(page_title="CreditCheck AI", page_icon="💳", layout="wide")
-
-# ---------------- STYLE ---------------- #
-st.markdown("""
-<style>
-body {background:#0e1117; color:white;}
-.title {font-size:36px;font-weight:bold;color:#4da6ff;text-align:center;}
-.subtitle {text-align:center;color:#aaa;margin-bottom:25px;}
-.stButton>button {background:#4da6ff;color:black;border-radius:6px;}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="title">CreditCheck AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Reliable • Explainable • Enterprise Ready</div>', unsafe_allow_html=True)
+st.set_page_config(page_title="Credit Risk AI", layout="wide")
 
 # ---------------- LOAD ---------------- #
 model = joblib.load("model.pkl")
 encoders = joblib.load("encoders.pkl")
 
-# ---------------- HELPERS ---------------- #
-def select_box(label, options):
-    return st.selectbox(label, ["Select"] + list(options))
+# ---------------- LOAD TRAIN DATA (IMPORTANT FOR EDA) ---------------- #
+try:
+    train_df = pd.read_csv("application_record.csv")
+except:
+    train_df = None
 
+# ---------------- INDIAN FORMAT ---------------- #
+def format_inr(num):
+    if num >= 10000000:
+        return f"₹{num/10000000:.2f} Cr"
+    elif num >= 100000:
+        return f"₹{num/100000:.2f} L"
+    else:
+        return f"₹{num:,.0f}"
+
+# Currency conversion (basic fallback)
+def convert_to_inr(value, currency="INR"):
+    rates = {"USD": 83, "EUR": 90, "INR": 1}
+    return value * rates.get(currency, 1)
+
+# ---------------- HELPERS ---------------- #
 def safe_encode(col, value):
     classes = list(encoders[col].classes_)
     value = str(value).strip().title()
@@ -42,142 +46,153 @@ def safe_encode(col, value):
 
     return -1
 
-# 🔥 NORMALIZATION (balance features)
+# Normalize
 def normalize(df):
-    df['AMT_INCOME_TOTAL'] = df['AMT_INCOME_TOTAL'] / 100000
-    df['CNT_FAM_MEMBERS'] = df['CNT_FAM_MEMBERS'] / 10
+    df['AMT_INCOME_TOTAL'] /= 100000
+    df['CNT_FAM_MEMBERS'] /= 10
     return df
 
-# 🔥 CREDIT TRANSFORM (less bias)
+# Reduce credit dominance
 def transform_credit(score):
     return (900 - score) / 150
 
-# 🔥 EXPLAINABILITY
-def explain(df):
-    reasons = []
+# ---------------- UI ---------------- #
+st.title("💳 Credit Approval System (India)")
 
-    if df['AMT_INCOME_TOTAL'][0] > 0.5:
-        reasons.append("High income improves repayment ability")
+tab1, tab2 = st.tabs(["Individual Prediction", "Bulk Processing"])
 
-    if df['CNT_FAM_MEMBERS'][0] > 0.5:
-        reasons.append("More dependents increase financial pressure")
+# =====================================================
+# 🔮 TAB 1: INDIVIDUAL
+# =====================================================
+with tab1:
 
-    if df['CREDIT_SCORE'][0] < 2:
-        reasons.append("Good credit history increases trust")
+    st.subheader("Applicant Details")
 
-    if df['CREDIT_SCORE'][0] > 4:
-        reasons.append("Poor credit history increases risk")
+    c1, c2, c3 = st.columns(3)
 
-    return reasons
+    with c1:
+        gender = st.selectbox("Gender", ["Select"] + list(encoders['CODE_GENDER'].classes_))
+        income = st.number_input("Annual Income", min_value=0)
 
-# ---------------- INPUT ---------------- #
-st.subheader("Applicant Details")
+    with c2:
+        income_type = st.selectbox("Income Type", ["Select"] + list(encoders['NAME_INCOME_TYPE'].classes_))
+        education = st.selectbox("Education", ["Select"] + list(encoders['NAME_EDUCATION_TYPE'].classes_))
 
-c1, c2, c3 = st.columns(3)
+    with c3:
+        family_status = st.selectbox("Family Status", ["Select"] + list(encoders['NAME_FAMILY_STATUS'].classes_))
+        occupation = st.selectbox("Occupation", ["Select"] + list(encoders['OCCUPATION_TYPE'].classes_))
 
-with c1:
-    gender = select_box("Gender", encoders['CODE_GENDER'].classes_)
-    income = st.number_input("Income", min_value=0)
+    family_members = st.slider("Family Members", 1, 10, 2)
+    credit_score = st.slider("Credit Score", 300, 900, 650)
 
-with c2:
-    income_type = select_box("Income Type", encoders['NAME_INCOME_TYPE'].classes_)
-    education = select_box("Education", encoders['NAME_EDUCATION_TYPE'].classes_)
-
-with c3:
-    family_status = select_box("Family Status", encoders['NAME_FAMILY_STATUS'].classes_)
-    occupation = select_box("Occupation", encoders['OCCUPATION_TYPE'].classes_)
-
-family_members = st.slider("Family Members", 1, 10, 2)
-credit_score = st.slider("Credit Score", 300, 900, 650)
-
-# 🔴 STRICT VALIDATION
-errors = []
-if gender == "Select": errors.append("Gender")
-if income <= 0: errors.append("Income")
-if income_type == "Select": errors.append("Income Type")
-if education == "Select": errors.append("Education")
-if family_status == "Select": errors.append("Family Status")
-if occupation == "Select": errors.append("Occupation")
-
-if errors:
-    st.warning("Please fill all fields: " + ", ".join(errors))
-
-# ---------------- ANALYZE ---------------- #
-if st.button("Analyze", disabled=len(errors) > 0):
-
-    df = pd.DataFrame([[ 
-        safe_encode('CODE_GENDER', gender),
-        income,
-        safe_encode('NAME_INCOME_TYPE', income_type),
-        safe_encode('NAME_EDUCATION_TYPE', education),
-        safe_encode('NAME_FAMILY_STATUS', family_status),
-        safe_encode('OCCUPATION_TYPE', occupation),
-        family_members,
-        transform_credit(credit_score)
-    ]], columns=[
-        'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
-        'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
-        'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
+    # VALIDATION
+    valid = all([
+        gender != "Select",
+        income > 0,
+        income_type != "Select",
+        education != "Select",
+        family_status != "Select",
+        occupation != "Select"
     ])
 
-    df = normalize(df)
+    # BUTTON (STRICT)
+    if st.button("Predict", disabled=not valid):
 
-    pred = model.predict(df)[0]
-    prob = model.predict_proba(df)[0][1] * 100
+        # Convert to INR if needed
+        income_inr = convert_to_inr(income)
 
-    decision = "Approved" if pred == 1 else "Rejected"
+        df = pd.DataFrame([[ 
+            safe_encode('CODE_GENDER', gender),
+            income_inr,
+            safe_encode('NAME_INCOME_TYPE', income_type),
+            safe_encode('NAME_EDUCATION_TYPE', education),
+            safe_encode('NAME_FAMILY_STATUS', family_status),
+            safe_encode('OCCUPATION_TYPE', occupation),
+            family_members,
+            transform_credit(credit_score)
+        ]], columns=[
+            'CODE_GENDER','AMT_INCOME_TOTAL','NAME_INCOME_TYPE',
+            'NAME_EDUCATION_TYPE','NAME_FAMILY_STATUS',
+            'OCCUPATION_TYPE','CNT_FAM_MEMBERS','CREDIT_SCORE'
+        ])
 
-    # 🔥 SAFETY CHECK (avoid overconfidence)
-    if prob < 55:
-        decision = "Borderline"
+        df = normalize(df)
 
-    # RESULT
-    st.markdown("### Result")
-    st.success(f"{decision} ({prob:.2f}%)")
-    st.progress(int(prob))
+        pred = model.predict(df)[0]
+        prob = model.predict_proba(df)[0][1] * 100
 
-    # EXPLANATION
-    st.markdown("### Why this decision?")
-    for r in explain(df):
-        st.write("•", r)
+        # Threshold tuning (bias mitigation)
+        if prob > 65:
+            decision = "Approved"
+        elif prob < 45:
+            decision = "Rejected"
+        else:
+            decision = "Borderline"
 
-    # =====================================================
-    # 📊 EDA (BELOW ANALYZE BUTTON)
-    # =====================================================
-    st.markdown("## 📊 Quick Data Analysis")
+        st.success(f"{decision} ({prob:.2f}%)")
+        st.write("Income:", format_inr(income_inr))
 
-    eda_file = st.file_uploader("Upload Dataset for Analysis", type=["csv"])
+        # ---------------- INSTANT EDA ---------------- #
+        if train_df is not None:
+            st.markdown("### 📊 Input vs Dataset Comparison")
 
-    if eda_file:
-        edf = pd.read_csv(eda_file)
+            fig, ax = plt.subplots()
+            ax.hist(train_df['AMT_INCOME_TOTAL'], bins=30, alpha=0.5)
+            ax.axvline(income_inr, linestyle="dashed")
+            st.pyplot(fig)
+
+# =====================================================
+# 📂 TAB 2: BULK
+# =====================================================
+with tab2:
+
+    file = st.file_uploader("Upload CSV", type=["csv"])
+
+    if file:
+        df = pd.read_csv(file)
 
         st.write("Preview")
-        st.dataframe(edf.head())
+        st.dataframe(df.head())
 
-        # Stats
-        st.write("### Statistics")
-        st.write(edf.describe())
+        # CLEAN
+        for col in df.select_dtypes(include='object'):
+            df[col] = df[col].astype(str).str.title()
 
-        # Missing
-        st.write("### Missing Values")
-        st.write(edf.isnull().sum())
+        df['CREDIT_SCORE'] = df['CREDIT_SCORE'].apply(transform_credit)
+        df = normalize(df)
 
-        # Income Distribution
-        st.write("### Income Distribution")
-        fig, ax = plt.subplots()
-        ax.hist(edf['AMT_INCOME_TOTAL'], bins=20)
-        st.pyplot(fig)
+        preds = model.predict(df)
+        probs = model.predict_proba(df)[:,1] * 100
 
-        # Credit Score Distribution
-        st.write("### Credit Score Distribution")
-        fig, ax = plt.subplots()
-        ax.hist(edf['CREDIT_SCORE'], bins=20)
-        st.pyplot(fig)
+        df['Decision'] = np.where(probs > 65, "Approved",
+                          np.where(probs < 45, "Rejected", "Borderline"))
+
+        df['Confidence'] = probs
+
+        st.markdown("### 📊 Summary")
+        st.metric("Total", len(df))
+        st.metric("Approved", (df['Decision']=="Approved").sum())
+        st.metric("Rejected", (df['Decision']=="Rejected").sum())
+
+        st.dataframe(df)
+
+        # ---------------- ADVANCED EDA ---------------- #
+        st.markdown("## 📊 Data Insights")
 
         # Correlation
-        st.write("### Correlation Heatmap")
-        corr = edf.corr(numeric_only=True)
+        corr = df.corr(numeric_only=True)
         fig, ax = plt.subplots()
         cax = ax.matshow(corr)
         fig.colorbar(cax)
         st.pyplot(fig)
+
+        # Distribution
+        fig, ax = plt.subplots()
+        ax.hist(df['AMT_INCOME_TOTAL'], bins=20)
+        st.pyplot(fig)
+
+        # Feature importance (if tree model)
+        if hasattr(model, "feature_importances_"):
+            st.markdown("### Feature Importance")
+            imp = pd.Series(model.feature_importances_, index=df.columns[:-2])
+            st.bar_chart(imp.sort_values(ascending=False))
